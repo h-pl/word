@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>单词分类学习</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 保持之前的样式不变 */
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            text-align: center;
+            font-family: 'Segoe UI', sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        #excelInput { display: none; }
+        .action-btn {
+            padding: 12px 24px;
+            background: #4e73df;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+        }
+        .action-btn:hover {
+            background: #3a5ccc;
+            transform: translateY(-2px);
+        }
+        .upload-status { color: #666; margin-top: 10px; }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #4a5568;
+            margin-bottom: 5px;
+        }
+        .progress-bar {
+            height: 20px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            display: flex;
+            overflow: hidden;
+        }
+        .progress-segment {
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+        .easy-segment { background: #4CAF50; }
+        .medium-segment { background: #FFC107; }
+        .hard-segment { background: #F44336; }
+
+        .word-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+            height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s;
+            position: relative;
+            display: none;
+        }
+        .word-card h2 { font-size: 2rem; margin: 0; color: #2d3748; }
+        .word-card .phonetic { color: #718096; font-style: italic; margin: 10px 0; }
+        .word-card .translation { color: #4a5568; margin: 0; }
+
+        .category-boxes {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        .folder {
+            width: 100px;
+            height: 80px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        .folder-icon { 
+            font-size: 3rem; 
+            transition: all 0.3s;
+            position: relative;
+            z-index: 2;
+        }
+        .folder-count {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 3;
+            font-weight: bold;
+        }
+        .easy-folder { color: #4CAF50; }
+        .medium-folder { color: #FFC107; }
+        .hard-folder { color: #F44336; }
+        .folder-open { transform: scale(1.1); }
+
+        @keyframes fly-to-folder {
+            0% { 
+                transform: translate(0, 0) scale(1) rotate(0deg);
+                opacity: 1;
+            }
+            50% {
+                transform: translate(var(--tx), var(--ty)) scale(0.5) rotate(10deg);
+                opacity: 0.8;
+            }
+            100% { 
+                transform: translate(var(--tx), var(--ty)) scale(0.1) rotate(20deg);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes folder-bounce {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-15px) scale(1.1); }
+        }
+        
+        .flying-card {
+            position: fixed;
+            z-index: 100;
+            pointer-events: none;
+            animation: fly-to-folder 0.8s cubic-bezier(0.5, 0, 0.5, 1) forwards;
+            transform-origin: center;
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            width: 200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .folder-animate {
+            animation: folder-bounce 0.6s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 文件上传和按钮组 -->
+        <div class="button-group">
+            <label for="excelInput" class="action-btn"><i class="fas fa-upload"></i> 上传Excel文件</label>
+            <button class="action-btn" id="saveBtn"><i class="fas fa-save"></i> 保存进度</button>
+            <button class="action-btn" id="exportBtn"><i class="fas fa-download"></i> 导出结果</button>
+        </div>
+        <input type="file" id="excelInput" accept=".xls,.xlsx">
+        <div class="upload-status" id="uploadStatus">等待上传...</div>
+
+        <!-- 进度条 -->
+        <div class="progress-container">
+            <div class="progress-info">
+                <span>进度: <span id="progressCount">0</span>/<span id="totalCount">0</span></span>
+                <span>简单: <span id="easyCount">0</span> | 一般: <span id="mediumCount">0</span> | 困难: <span id="hardCount">0</span></span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-segment easy-segment" id="easyProgress"></div>
+                <div class="progress-segment medium-segment" id="mediumProgress"></div>
+                <div class="progress-segment hard-segment" id="hardProgress"></div>
+            </div>
+        </div>
+
+        <!-- 单词卡片模块 -->
+        <div class="word-card" id="wordCard">
+            <h2 id="word"></h2>
+            <p class="phonetic" id="phonetic"></p>
+            <p class="translation" id="translation"></p>
+        </div>
+
+        <!-- 分类文件夹模块 -->
+        <div class="category-boxes">
+            <div class="folder" data-level="easy">
+                <span class="folder-count" id="easyFolderCount">0</span>
+                <i class="fas fa-folder folder-icon easy-folder"></i>
+                <span>简单</span>
+            </div>
+            <div class="folder" data-level="medium">
+                <span class="folder-count" id="mediumFolderCount">0</span>
+                <i class="fas fa-folder folder-icon medium-folder"></i>
+                <span>一般</span>
+            </div>
+            <div class="folder" data-level="hard">
+                <span class="folder-count" id="hardFolderCount">0</span>
+                <i class="fas fa-folder folder-icon hard-folder"></i>
+                <span>困难</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        let words = [];
+        let currentIndex = 0;
+        let progressData = { current: 0, categories: { easy: [], medium: [], hard: [] } };
+        let fileName = '';
+
+        // DOM 元素
+        const excelInput = document.getElementById('excelInput');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const wordCard = document.getElementById('wordCard');
+        const wordEl = document.getElementById('word');
+        const phoneticEl = document.getElementById('phonetic');
+        const translationEl = document.getElementById('translation');
+        const progressCount = document.getElementById('progressCount');
+        const totalCount = document.getElementById('totalCount');
+        const easyCount = document.getElementById('easyCount');
+        const mediumCount = document.getElementById('mediumCount');
+        const hardCount = document.getElementById('hardCount');
+        const easyFolderCount = document.getElementById('easyFolderCount');
+        const mediumFolderCount = document.getElementById('mediumFolderCount');
+        const hardFolderCount = document.getElementById('hardFolderCount');
+        const easyProgress = document.getElementById('easyProgress');
+        const mediumProgress = document.getElementById('mediumProgress');
+        const hardProgress = document.getElementById('hardProgress');
+        const saveBtn = document.getElementById('saveBtn');
+        const exportBtn = document.getElementById('exportBtn');
+
+        // 文件上传与解析
+        excelInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            fileName = file.name.replace(/\.[^/.]+$/, ""); // 移除扩展名
+            uploadStatus.textContent = '正在解析...';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    // 获取表头行
+                    const headers = jsonData[0] || [];
+                    
+                    // 查找各列的索引位置（支持更多可能的列名）
+                    const findColumnIndex = (possibleNames) => {
+                        for (let name of possibleNames) {
+                            const index = headers.findIndex(h => 
+                                h && h.toString().toLowerCase().includes(name.toLowerCase()));
+                            if (index !== -1) return index;
+                        }
+                        return -1;
+                    };
+                    
+                    const englishIndex = findColumnIndex(['english', '英文', '单词', 'word']);
+                    const phoneticIndex = findColumnIndex(['phonetic', '音标', '发音']);
+                    const chineseIndex = findColumnIndex(['chinese', '中文', '翻译', '释义']);
+                    
+                    if (englishIndex === -1) {
+                        throw new Error("未找到英文列，请确保Excel包含英文/单词列");
+                    }
+                    
+                    // 处理数据行
+                    words = [];
+                    for (let i = 1; i < jsonData.length; i++) {
+                        const row = jsonData[i] || [];
+                        if (!row[englishIndex]) continue; // 跳过没有英文单词的行
+                        
+                        words.push({
+                            english: String(row[englishIndex]).trim() || '未知',
+                            phonetic: phoneticIndex !== -1 ? String(row[phoneticIndex] || '').trim() : '',
+                            chinese: chineseIndex !== -1 ? String(row[chineseIndex] || '').trim() : '未知'
+                        });
+                    }
+                    
+                    if (words.length === 0) {
+                        throw new Error("Excel中没有找到有效数据，请检查文件内容");
+                    }
+                    
+                    uploadStatus.textContent = `解析完成，共 ${words.length} 个单词`;
+                    totalCount.textContent = words.length;
+                    loadProgress();
+                    showWord();
+                    updateProgress();
+                    
+                } catch (error) {
+                    uploadStatus.textContent = `解析失败: ${error.message}`;
+                    console.error("解析错误:", error);
+                }
+            };
+            
+            reader.onerror = function() {
+                uploadStatus.textContent = "文件读取失败，请重试";
+            };
+            
+            reader.readAsArrayBuffer(file);
+        });
+
+        // 单词卡片展示
+        function showWord() {
+            if (currentIndex >= words.length) {
+                wordCard.style.display = 'none';
+                uploadStatus.textContent = '所有单词已分类完成';
+                return;
+            }
+            
+            const word = words[currentIndex];
+            if (!word || !word.english) {
+                currentIndex++;
+                return showWord(); // 跳过无效单词
+            }
+            
+            wordEl.textContent = word.english;
+            phoneticEl.textContent = word.phonetic ? `/${word.phonetic}/` : '';
+            translationEl.textContent = word.chinese.replace(/["\[\]]/g, '');
+            wordCard.style.display = 'flex';
+        }
+
+        // 分类动画
+        document.querySelectorAll('.folder').forEach(folder => {
+            folder.addEventListener('click', function() {
+                if (currentIndex >= words.length) return;
+                
+                const level = this.dataset.level;
+                const folderIcon = this.querySelector('.folder-icon');
+                const currentWord = words[currentIndex];
+                
+                if (!currentWord || !currentWord.english) {
+                    currentIndex++;
+                    showWord();
+                    return;
+                }
+                
+                // 创建卡片副本用于动画
+                const cardClone = document.createElement('div');
+                cardClone.className = 'flying-card';
+                cardClone.innerHTML = `
+                    <h2 style="font-size:1.2rem;margin:0">${currentWord.english}</h2>
+                    ${currentWord.phonetic ? `<p style="color:#718096;font-style:italic;margin:5px 0;font-size:0.9rem">/${currentWord.phonetic}/</p>` : ''}
+                `;
+                
+                // 设置初始位置
+                const cardRect = wordCard.getBoundingClientRect();
+                cardClone.style.top = cardRect.top + 'px';
+                cardClone.style.left = cardRect.left + 'px';
+                cardClone.style.width = cardRect.width + 'px';
+                document.body.appendChild(cardClone);
+                
+                // 计算目标位置（文件夹中心）
+                const folderRect = this.getBoundingClientRect();
+                const targetX = folderRect.left + folderRect.width/2 - cardRect.left;
+                const targetY = folderRect.top + folderRect.height/2 - cardRect.top;
+                
+                // 设置动画变量
+                cardClone.style.setProperty('--tx', targetX + 'px');
+                cardClone.style.setProperty('--ty', targetY + 'px');
+                
+                // 文件夹弹跳动画
+                folderIcon.classList.add('folder-animate');
+                
+                // 隐藏原卡片
+                wordCard.style.opacity = '0';
+                
+                // 添加到分类并更新
+                progressData.categories[level].push(currentWord);
+                currentIndex++;
+                
+                // 动画完成后处理
+                setTimeout(() => {
+                    cardClone.remove();
+                    folderIcon.classList.remove('folder-animate');
+                    updateProgress();
+                    showWord();
+                    wordCard.style.opacity = '1';
+                }, 800);
+            });
+        });
+
+        // 数据保存与进度管理
+        function loadProgress() {
+            const saved = localStorage.getItem('wordProgress');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    if (data.words && data.words.length > 0) {
+                        // 只有当保存的单词列表与当前文件名匹配时才恢复进度
+                        if (data.fileName === fileName) {
+                            progressData = data;
+                            currentIndex = progressData.current || 0;
+                            words = data.words;
+                            totalCount.textContent = words.length;
+                        }
+                    }
+                    updateProgress();
+                } catch(e) {
+                    console.error("加载进度失败:", e);
+                }
+            }
+        }
+
+        function saveProgress() {
+            progressData.current = currentIndex;
+            progressData.words = words;
+            progressData.fileName = fileName;
+            localStorage.setItem('wordProgress', JSON.stringify(progressData));
+            uploadStatus.textContent = `进度已保存 (${new Date().toLocaleTimeString()})`;
+            setTimeout(() => {
+                if (currentIndex < words.length) uploadStatus.textContent = '';
+            }, 2000);
+        }
+
+        function updateProgress() {
+            const total = words.length;
+            const easy = progressData.categories.easy.length;
+            const medium = progressData.categories.medium.length;
+            const hard = progressData.categories.hard.length;
+            const classified = easy + medium + hard;
+            
+            progressCount.textContent = classified;
+            totalCount.textContent = total;
+            easyCount.textContent = easy;
+            mediumCount.textContent = medium;
+            hardCount.textContent = hard;
+            easyFolderCount.textContent = easy;
+            mediumFolderCount.textContent = medium;
+            hardFolderCount.textContent = hard;
+            
+            easyProgress.style.width = `${(easy / total) * 100}%`;
+            mediumProgress.style.width = `${(medium / total) * 100}%`;
+            hardProgress.style.width = `${(hard / total) * 100}%`;
+        }
+
+        // 导出功能
+        exportBtn.addEventListener('click', function() {
+            if (words.length === 0) {
+                uploadStatus.textContent = '没有单词数据可导出';
+                return;
+            }
+            
+            try {
+                const exportData = words.map(word => {
+                    let difficulty = '';
+                    if (progressData.categories.easy.some(w => w.english === word.english)) {
+                        difficulty = '简单';
+                    } else if (progressData.categories.medium.some(w => w.english === word.english)) {
+                        difficulty = '一般';
+                    } else if (progressData.categories.hard.some(w => w.english === word.english)) {
+                        difficulty = '困难';
+                    }
+                    return {
+                        英文: word.english,
+                        音标: word.phonetic,
+                        中文: word.chinese,
+                        难度: difficulty || '未分类'
+                    };
+                });
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, '单词分类');
+                XLSX.writeFile(wb, `${fileName || '单词'}_分类结果.xlsx`);
+                uploadStatus.textContent = '导出成功';
+            } catch (error) {
+                uploadStatus.textContent = `导出失败: ${error.message}`;
+                console.error("导出错误:", error);
+            }
+            
+            setTimeout(() => {
+                if (currentIndex < words.length) uploadStatus.textContent = '';
+            }, 2000);
+        });
+
+        // 初始化
+        saveBtn.addEventListener('click', saveProgress);
+        setInterval(saveProgress, 5 * 60 * 1000); // 5分钟自动保存
+        window.addEventListener('beforeunload', saveProgress);
+    </script>
+</body>
+</html>
