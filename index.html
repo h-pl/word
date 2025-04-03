@@ -273,12 +273,12 @@
                         return -1;
                     };
                     
-                    const englishIndex = findColumnIndex(['english', '英文', '单词', 'word']);
+                    const englishIndex = findColumnIndex(['外语','english','English', '英文', '单词', 'word','日文','Japanese','japanese']);
                     const phoneticIndex = findColumnIndex(['phonetic', '音标', '发音']);
-                    const chineseIndex = findColumnIndex(['chinese', '中文', '翻译', '释义']);
+                    const chineseIndex = findColumnIndex(['chinese','Chinese','中文', '翻译', '释义']);
                     
                     if (englishIndex === -1) {
-                        throw new Error("未找到英文列，请确保Excel包含英文/单词列");
+                        throw new Error("未找到单词列，请确保Excel包含英文/日文/单词列");
                     }
                     
                     // 处理数据行
